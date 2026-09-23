@@ -80,3 +80,22 @@ Vercel Hobby cron runs only daily, so scheduling uses Supabase `pg_cron` → `pg
 ## D-11 Least-privilege server database role (CP-12, CP-33) — 2026-09-22
 
 The Supabase secret/service-role key is not obtainable through available tools, and using it for app logic would bypass RLS anyway. The Next.js server uses `crowdplan_server` (explicit grants + table-scoped RLS policies, not BYPASSRLS) only for server-owned state: provider cache, search ledger/budgets, live candidate enrichment, notifications and jobs. All user-facing reads/writes use the user's JWT.
+
+## D-12 Scheduling implemented (CP-24) — 2026-09-22
+
+Implemented per D-09: migration 0800 schedules `crowdplan-jobs` every 10 minutes (`private.dispatch_jobs()` reads `jobs_url`/`jobs_secret` from `private.app_settings`; returns null and does nothing until both exist) plus a daily `job_runs` trim. `/api/jobs/run` rejects any request without the exact `x-job-secret`. Reminders go only to members who have not responded; deadline/consensus/refresh work is idempotent through `job_runs` dedupe keys. Refresh cadence scales with urgency (`refreshCadenceHours`: 72 h when undated, tightening as the date nears); finalized or archived plans get no automatic provider searches, matching "minimal or no refreshing".
+
+## D-13 MapLibre worker and service worker (CP-22, CP-27) — 2026-09-22
+
+MapLibre 6 derives its worker URL from `import.meta.url`, which bundlers rewrite to a non-http URL, so the worker failed to load. `scripts/copy-maplibre-worker.mjs` copies the worker and its shared chunk to `public/maplibre/` at predev/prebuild (gitignored) and the map calls `setWorkerUrl` before creating a map. The service worker is cache-first for `/_next/static/` (content-hashed in production); in development the app unregisters any service worker, because dev chunk names are not hashed and a leftover worker served stale code.
+
+## D-14 Saved-preference prefill (CP-28) — 2026-09-22
+
+Account holders answering a plan for the first time see a one-line summary of their saved preferences with "Fill these in" / "Not this time". Nothing is applied until they choose it; values stay editable and are stored only when they save the form. Free-text dietary items that do not match a chip are moved into the visible notes, never dropped silently. Guests never see saved preferences (RLS denies guests the table).
+
+## D-15 Production database and test automation (CP-21, CP-32, CP-35) — 2026-09-22
+
+- Migrations 0100–0900 applied to production `crowdplan` (`twfikotaolsyrouofcxh`). Catalog fingerprints (policies, table/column grants, columns, triggers, constraints, realtime publication, cron jobs) are identical to `crowdplan-test`; function bodies differ only in whitespace/comments from earlier formatting.
+- `crowdplan_server` LOGIN is set with a SCRAM-SHA-256 verifier generated locally, so the plaintext password never passes through a tool call; the connection string lives only in the deployment environment and a local file outside the repository.
+- `cp-admin` (test automation) is deployed to production so the release suite can use real password and magic-link sign-in. It accepts only `@crowdplan-e2e.example.com` accounts, requires a 64-hex secret whose SHA-256 is in `private.app_settings`, and its cleanup deletes only run-tagged test accounts and plan-less minted guests. Removing the `e2e_admin_secret_sha256` row disables it completely.
+- Claimed guest identities stay in `auth.users` without memberships (harmless, not visible to anyone). A periodic purge is a follow-up, not a V1 requirement.
