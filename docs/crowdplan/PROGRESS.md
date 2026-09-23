@@ -16,23 +16,24 @@ Live ledger. Every status below is backed by the evidence listed; nothing is mar
 | [07](prompts/07-automation-finalization.md) | Deadlines, notifications, jobs, final plans | Complete (email conditional on `RESEND_API_KEY`) | int `jobs.test.ts`, `account.test.ts`; e2e I, saved preferences |
 | [08](prompts/08-design-demo-performance.md) | Consumer experience, signature views, demos | Complete | four `/demo/*` plans; desktop 1440 + mobile 390 runs; zero console errors |
 | [09](prompts/09-qa-hardening.md) | Automated, multi-user and security verification | Complete | `npm run verify` green; 80 unit / 30 int / 13 e2e; advisors reviewed |
-| [10](prompts/10-production-release.md) | Deploy to Vercel and verify production | **In progress — BLOCKED on Vercel authorization** | Production Supabase ready and verified (below); Vercel API returns 403 for the team scope |
+| [10](prompts/10-production-release.md) | Deploy to Vercel and verify production | **Deployed and verified; not complete** — public organizer sign-up blocked by Supabase Auth email/URL config; live search blocked by `SERPAPI_API_KEY` | https://crowdplan.vercel.app @ 4df3c85: Playwright 13/13, 0 runtime errors, jobs chain 200 |
 
 ## Next action
 
-1. User re-authenticates the Vercel connection (the MCP token returns `403 forbidden … You must re-authenticate to this scope` for team `eric-hinderers-projects-9db5122b` / `team_pMQeZettTaxP499LXqmf4GaX`), or installs/logs in the Vercel CLI.
-2. Then: `create_git_project` for `Eric-Hinderer/CrowdPlan` (project `crowdplan`) → add production env vars from the local secrets file (names in `.env.example`; `NEXT_PUBLIC_APP_URL` = production URL) → deploy production → insert `jobs_url` = `<prod>/api/jobs/run` into production `private.app_settings` → run `E2E_BASE_URL=<prod> E2E_NO_SERVER=1 npx playwright test` with the production env → inspect Vercel runtime logs and browser console → verify a pg_cron dispatch reaches `/api/jobs/run` (job_runs row).
-3. Supabase Auth URL configuration (Site URL + redirect allow-list = production URL) must be set in the dashboard; organizer email magic links otherwise land on the default Site URL. Password sign-in and guest joins do not depend on it.
+1. User (Supabase dashboard → Authentication → URL Configuration): Site URL `https://crowdplan.vercel.app`; redirect allow-list `https://crowdplan.vercel.app/**` and `http://localhost:3000/**`.
+2. User (Authentication → SMTP): configure a custom SMTP sender (e.g. Resend SMTP). Default SMTP delivers only to organization members, and production requires email confirmation (`mailer_autoconfirm: false`), so a new organizer outside the org cannot finish sign-up today.
+3. User: provide `SERPAPI_API_KEY` → add to Vercel production (sensitive) → redeploy → run `E2E_EXPECT_SERPAPI=1` Playwright B/H against production and record live provider evidence (CP-10).
+4. After 1–2: verify a real organizer sign-up + magic-link sign-in end to end on production and record it (CP-05).
 
-## External blockers (updated 2026-09-22 23:50 CDT)
+## External blockers (updated 2026-09-23 00:05 CDT)
 
 | Requirement | Status | Impact | Independent work done |
 | --- | --- | --- | --- |
-| Vercel authorization | **Blocked** — MCP token lost team scope (403); no Vercel CLI or token on the machine | Cannot create the project or deploy (CP-32 prod run, CP-35, CP-36) | Production Supabase fully provisioned; production build verified locally against the production backend (13/13 e2e) |
-| `SERPAPI_API_KEY` | **Missing** | Live-provider gate (CP-10; live parts of B/H) stays BLOCKED | Provider layer, normalization, cache, dedupe, budget, retries tested with labeled fixtures; UI disables live search with an explicit label |
-| Supabase Auth URL config + custom SMTP | Not changeable with available tools | Magic-link emails use the default Site URL; default SMTP only delivers to org members | Password sign-in, token-hash verification, and guest joins work without it |
-| `ANTHROPIC_API_KEY` | Missing (optional) | LLM interpretation off | Deterministic parser + validated schema; adapter implemented |
+| Supabase Auth URL config + custom SMTP | **Blocked** — no tool can change auth config | New organizers cannot confirm sign-up by email; magic links use the default Site URL | Existing organizers sign in with password (verified on production); guest joins need no email |
+| `SERPAPI_API_KEY` | **Missing** | Live-provider gate (CP-10; live parts of B/H) stays BLOCKED | Provider layer tested with labeled fixtures; UI shows live search as unavailable |
+| `ANTHROPIC_API_KEY` | Missing (optional) | LLM interpretation off | Deterministic parser + validated schema |
 | `RESEND_API_KEY` | Missing (optional) | Email notifications off | In-app notifications |
+| Vercel authorization | Resolved 2026-09-22 23:50 CDT via Vercel CLI (MCP connection still returns 403 in this session) | — | — |
 
 ## Current evidence
 
@@ -42,6 +43,8 @@ Live ledger. Every status below is backed by the evidence listed; nothing is mar
 - Automated checks (2026-09-22 23:29–23:47 CDT): `npm run verify` green (typecheck, lint, 80 unit, build); integration 30/30 against test **and** 30/30 against production Supabase; Playwright 13/13 (desktop + mobile) against local dev + test project **and** 13/13 against a local production build (`next start`) + production Supabase.
 - Browser console on the production build: 0 errors (3 third-party OpenFreeMap style warnings); service worker registers; map renders.
 - Advisors (production): security — 5 intentional authenticated SECURITY DEFINER RPCs (each checks `auth.uid()`, covered by int tests) + INFO deny-all `private.claim_tickets`; performance — 4 unindexed FKs fixed by migration 0900, 1 unused index on an empty cache table.
+- **Production (Vercel)**: project `crowdplan` (`prj_spgNDQM0z2ZVvxxf50DOnwf2XCR0`), Git-connected to `Eric-Hinderer/CrowdPlan` `main`; production deployment `crowdplan-jqn93w1gk…` READY, built from commit `4df3c85` (GitHub deployment record), aliased to https://crowdplan.vercel.app. Env vars (production): Supabase URL/publishable key, `CROWDPLAN_SERVER_DATABASE_URL`, `CROWDPLAN_INVITE_KEY`, `CROWDPLAN_JOB_SECRET` (sensitive), `CROWDPLAN_PLAN_SEARCH_BUDGET`, `NEXT_PUBLIC_APP_URL`. `E2E_ADMIN_SECRET` intentionally not deployed.
+- Production verification (2026-09-22 23:55–00:00 CDT): Playwright 13/13 against https://crowdplan.vercel.app (A–I, mobile 390, saved preferences; run `e2e-mudmqraq-1cf2`, cleanup 8 plans / 18 users); `vercel logs` production last 30 min: 0 error, 0 warning, 0 5xx, only 4xx = two deliberate unauthenticated `/api/jobs/run` probes (401); browser console on `/`, `/demo/vegas`, `/demo/shortlist` + map: 0 errors (3 third-party map-style warnings); service worker + manifest served; CSP/HSTS/X-Frame-Options/nosniff present; `pg_net` dispatch → `/api/jobs/run` 200 through the server role.
 - Cleanup: every run deletes its own accounts/plans via `cp-admin cleanup`; production after runs: 0 users, 0 plans, 0 jobs, 0 notifications.
 
 ## Phase 00 record — 2026-09-22 21:40–21:55 CDT
@@ -77,7 +80,8 @@ Live ledger. Every status below is backed by the evidence listed; nothing is mar
 
 - Production Supabase: migrations 0100–0900 applied via MCP (first parallel attempt collided on migration versions; the failed ones rolled back and were reapplied sequentially); catalog compared with test (D-15); `join-plan` + `cp-admin` deployed; server role verified through the pooler (connects, reads, denied `delete` on plans and `auth.users`).
 - Verified against production Supabase from this machine: integration 30/30; Playwright 13/13 on a production build (`next build` + `next start`, CSP/HSTS headers present). Test data removed afterwards (counts all 0).
-- Blocked: Vercel project creation/deploy (403 re-authentication required). Nothing is deployed to Vercel yet; there is no production URL.
+- Blocked at first: Vercel project creation/deploy (403 re-authentication required).
+- 2026-09-22 23:50–00:05 CDT (after the user logged in to the Vercel CLI): created project `crowdplan`, connected GitHub, added production env vars from the local secrets file (values never printed), pinned `framework: nextjs` in `vercel.json` (the CLI-created project defaulted to "Other"), pushed 4df3c85 → Git production build READY in 52 s; set production `jobs_url`; verified jobs chain, Playwright 13/13, logs and console on https://crowdplan.vercel.app. `vercel link` appended `.env*`/`.vercel` to `.gitignore` (both already covered) — reverted. Public auth settings show `mailer_autoconfirm: false`, confirming the email-configuration blocker for new organizer sign-ups.
 
 ## Handoff record template
 
