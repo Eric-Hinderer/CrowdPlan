@@ -11,12 +11,14 @@ import { loadPlanBundle, toPlanInput, type FinalSnapshot, type PlanBundle } from
 import { logEvent } from "@/server/events";
 import { ActionError, requireAccount, requireViewer, run, type ActionResult } from "@/server/guard";
 import { emailExisting, notify } from "@/server/notify";
+import { rateLimit } from "@/server/rate-limit";
 import { runCriteriaSearch, type SearchRunResult } from "@/server/search";
 
 export async function runSearchAction(planId: string): Promise<ActionResult<SearchRunResult>> {
   return run(async () => {
     const { supabase, viewer } = await requireViewer();
     const id = z.string().uuid().parse(planId);
+    await rateLimit(`search:${viewer.userId}`, 20, 3600, "Searching is limited to keep costs down — try again later.");
     // Authorization first (RLS): only members can trigger a plan's search, and only the organizer
     // may spend the search budget on discovery.
     const bundle = await loadPlanBundle(supabase, id, viewer.userId);
@@ -30,6 +32,7 @@ export async function makeThisWorkAction(input: { planId: string; candidateId: s
     const { supabase, viewer } = await requireViewer();
     const planId = z.string().uuid().parse(input.planId);
     const candidateId = z.string().uuid().parse(input.candidateId);
+    await rateLimit(`repair:${viewer.userId}`, 60, 3600);
     const bundle = await loadPlanBundle(supabase, planId, viewer.userId);
     if (!bundle.me) throw new ActionError("You're not part of this plan.");
     if (bundle.plan.status !== "collecting") throw new ActionError("This plan is finalized.");

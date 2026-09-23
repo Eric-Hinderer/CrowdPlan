@@ -3,7 +3,11 @@ import path from "node:path";
 
 export default defineConfig({
   resolve: {
-    alias: { "@": path.resolve(import.meta.dirname, "src") },
+    alias: {
+      "@": path.resolve(import.meta.dirname, "src"),
+      // Server modules guard against client bundling; tests run them in Node directly.
+      "server-only": path.resolve(import.meta.dirname, "tests/shims/server-only.ts"),
+    },
   },
   test: {
     projects: [

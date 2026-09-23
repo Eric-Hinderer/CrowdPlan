@@ -12,6 +12,7 @@ import { interpretParticipant } from "@/providers/llm";
 import { logEvent } from "@/server/events";
 import { ActionError, requireViewer, run, type ActionResult } from "@/server/guard";
 import { checkEveryoneResponded } from "@/server/notify";
+import { rateLimit } from "@/server/rate-limit";
 
 async function myMember(supabase: Awaited<ReturnType<typeof requireViewer>>["supabase"], planId: string, userId: string) {
   const { data } = await supabase.from("plan_members").select("id, role").eq("plan_id", planId).eq("user_id", userId).maybeSingle();
@@ -60,6 +61,7 @@ export async function interpretStatementAction(input: { planId: string; text: st
     const { supabase, viewer } = await requireViewer();
     const planId = z.string().uuid().parse(input.planId);
     const text = z.string().trim().min(2).max(600).parse(input.text);
+    await rateLimit(`interpret:${viewer.userId}`, 60, 3600);
     await myMember(supabase, planId, viewer.userId);
     const { data: plan } = await supabase.from("plans").select("kind, timezone").eq("id", planId).single();
     const { result, provider } = await interpretParticipant(text, { now: Date.now(), timezone: plan!.timezone, kind: plan!.kind });

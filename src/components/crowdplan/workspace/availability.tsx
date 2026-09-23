@@ -32,8 +32,11 @@ function useGrid() {
   const travel = input.plan.kind === "travel";
   const dates = useMemo(() => allowedDates(input.dimensions, input.plan, 14).slice(0, travel ? 62 : 14), [input.dimensions, input.plan, travel]);
   const bounds = timeBounds(input.dimensions, input.plan.kind);
-  const winStart = bounds.window.start;
-  const winEnd = bounds.window.end;
+  // With a locked start time, show the hours around it so people can say "I can be there by…".
+  const fixed = bounds.fixedStart ? minutesOfDay(bounds.fixedStart) : null;
+  const hhmm = (m: number) => (m >= 1440 ? "24:00" : `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`);
+  const winStart = fixed != null ? hhmm(Math.max(0, fixed - 180)) : bounds.window.start;
+  const winEnd = fixed != null ? hhmm(Math.min(1440, fixed + 300)) : bounds.window.end;
   const slots = useMemo(() => {
     const out: number[] = [];
     if (travel) return out;

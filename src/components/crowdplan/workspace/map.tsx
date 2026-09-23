@@ -1,11 +1,14 @@
 "use client";
 
 import "maplibre-gl/dist/maplibre-gl.css";
-import { LngLatBounds, Map as MapLibre, Marker, NavigationControl, Popup } from "maplibre-gl";
+import { LngLatBounds, Map as MapLibre, Marker, NavigationControl, Popup, setWorkerUrl } from "maplibre-gl";
 import { useEffect, useRef } from "react";
 import type { CandidateEvaluation } from "@/domain/types";
 import type { CandidateRow } from "@/lib/plan-data";
 import { useWorkspace } from "./context";
+
+// Worker files are copied to /maplibre/ at build time (scripts/copy-maplibre-worker.mjs).
+const WORKER_URL = "/maplibre/maplibre-gl-worker.mjs";
 
 // OpenFreeMap: free vector tiles, no API key or per-request billing.
 const STYLE = "https://tiles.openfreemap.org/styles/liberty";
@@ -18,6 +21,7 @@ export function PlanMap({ candidates, evaluations, compact }: { candidates: Cand
 
   useEffect(() => {
     if (!ref.current) return;
+    setWorkerUrl(WORKER_URL);
     const map = new MapLibre({
       container: ref.current,
       style: STYLE,

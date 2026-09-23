@@ -55,6 +55,11 @@ export async function createPlan(page: Page, text: string, opts: { organizerName
   await page.getByRole("button", { name: "Create plan and invite friends" }).click();
   await page.waitForURL(/\/plan\/[0-9a-f-]{36}/, { timeout: 30_000, waitUntil: "commit" });
   await expect(page.getByTestId("resolution-board")).toBeVisible({ timeout: 30_000 });
+  // The invite sheet opens right after creation; dismiss it like a person would.
+  const invite = page.getByRole("dialog", { name: "Invite your group" });
+  await expect(invite).toBeVisible({ timeout: 10_000 });
+  await invite.getByRole("button", { name: "Close" }).click();
+  await expect(invite).toBeHidden();
   const id = /\/plan\/([0-9a-f-]{36})/.exec(page.url())![1];
   return id;
 }

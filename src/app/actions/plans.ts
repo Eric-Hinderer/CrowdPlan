@@ -10,13 +10,15 @@ import { interpretPlan, interpretationProviderName } from "@/providers/llm";
 import { logEvent } from "@/server/events";
 import { ActionError, requireAccount, requireViewer, run, type ActionResult } from "@/server/guard";
 import { decryptToken, generateInvite, inviteUrl } from "@/server/invite";
+import { rateLimit } from "@/server/rate-limit";
 import { enrichCandidatesInBackground } from "@/server/search";
 
 const TZ = z.string().min(3).max(64).regex(/^[A-Za-z_]+(?:\/[A-Za-z0-9_+-]+){0,2}$/);
 
 export async function interpretPlanAction(input: { text: string; timezone: string }): Promise<ActionResult<{ extraction: PlanExtraction; provider: string; fallbackReason?: string }>> {
   return run(async () => {
-    await requireViewer();
+    const { viewer } = await requireViewer();
+    await rateLimit(`interpret:${viewer.userId}`, 60, 3600);
     const text = z.string().trim().min(2, "Tell CrowdPlan a little more.").max(600).parse(input.text);
     const timezone = TZ.catch("America/Chicago").parse(input.timezone);
     const { result, provider, fallbackReason } = await interpretPlan(text, { now: Date.now(), timezone });
@@ -46,7 +48,8 @@ const createSchema = z.object({
 
 export async function createPlanAction(input: z.input<typeof createSchema>): Promise<ActionResult<{ planId: string }>> {
   return run(async () => {
-    const { supabase } = await requireAccount();
+    const { supabase, viewer } = await requireAccount();
+    await rateLimit(`create-plan:${viewer.userId}`, 30, 3600);
     const data = createSchema.parse(input);
     const dims: Dimension[] = data.dimensions.map((d) => ({ ...d, source: "user" as const }));
     for (const d of dims) {
@@ -203,6 +206,7 @@ const addCandidateSchema = z.object({
 export async function addCandidateAction(input: z.input<typeof addCandidateSchema>): Promise<ActionResult<{ candidateId: string }>> {
   return run(async () => {
     const { supabase, viewer } = await requireViewer();
+    await rateLimit(`add-candidate:${viewer.userId}`, 100, 3600);
     const data = addCandidateSchema.parse(input);
     let title = data.title || null;
     let url: string | null = null;
