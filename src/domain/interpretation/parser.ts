@@ -189,16 +189,10 @@ export function parsePlanStatement(input: string, ctx: InterpretationContext): P
 
   if (activity) {
     push({ key: "activity", label: "What", state: "LOCKED", value: { type: "text", text: activity }, display: activity, needsConfirmation: false });
-  } else if (kind === "activity") {
+  } else if (kind === "activity" && !place) {
+    // A named place already says what the plan is ("Vala's"); only ask "what" when it's open.
     const fun = /\bsomething fun\b|\bsomething to do\b|\banything\b/i.test(lower);
-    push({
-      key: "activity",
-      label: "What",
-      state: place ? "LOCKED" : "UNDECIDED",
-      value: place ? { type: "text", text: place } : null,
-      display: place ?? (fun ? "Something fun" : "Undecided"),
-      needsConfirmation: false,
-    });
+    push({ key: "activity", label: "What", state: "UNDECIDED", value: null, display: fun ? "Something fun" : "Undecided", needsConfirmation: false });
   }
 
   // --- Cuisine ------------------------------------------------------------------
@@ -290,8 +284,8 @@ export function parsePlanStatement(input: string, ctx: InterpretationContext): P
         sourceText: dayMatch[0].trim(),
         question: `Which ${cap(day)} do you mean?`,
         options: [
-          { label: `This ${cap(day)} (${formatDateLabel(d)})`, constraint: null },
-          { label: `The following ${cap(day)} (${formatDateLabel(addDays(d, 7))})`, constraint: null },
+          { label: `This ${cap(day)} (${formatDateLabel(d)})`, constraint: null, dimension: dateDraft(dateKey, dateLabel, d, cap(day)) },
+          { label: `The following ${cap(day)} (${formatDateLabel(addDays(d, 7))})`, constraint: null, dimension: dateDraft(dateKey, dateLabel, addDays(d, 7), cap(day)) },
         ],
       });
     }
@@ -300,8 +294,8 @@ export function parsePlanStatement(input: string, ctx: InterpretationContext): P
         sourceText: dayMatch[0].trim(),
         question: `Today is ${cap(day)}. Do you mean today or next ${cap(day)}?`,
         options: [
-          { label: `Today (${formatDateLabel(today)})`, constraint: null },
-          { label: `Next ${cap(day)} (${formatDateLabel(addDays(today, 7))})`, constraint: null },
+          { label: `Today (${formatDateLabel(today)})`, constraint: null, dimension: dateDraft(dateKey, dateLabel, today, cap(day)) },
+          { label: `Next ${cap(day)} (${formatDateLabel(addDays(today, 7))})`, constraint: null, dimension: dateDraft(dateKey, dateLabel, addDays(today, 7), cap(day)) },
         ],
       });
       d = today;
@@ -360,6 +354,10 @@ export function parsePlanStatement(input: string, ctx: InterpretationContext): P
   const title = buildTitle(text);
   const draft: PlanExtraction = { title, kind, mode, dimensions: dims, shortlist, clarifications };
   return planExtractionSchema.parse(draft);
+}
+
+function dateDraft(key: string, label: string, date: string, dayName: string): DimensionDraft {
+  return { key, label, state: "LOCKED", value: { type: "dates", dates: [date] }, display: `${dayName} (${formatDateLabel(date)})`, needsConfirmation: false };
 }
 
 const TEMPORAL = new Set([...WEEKDAYS, ...MONTHS, "tonight", "tomorrow", "today", "next", "this", "sometime", "weekend"]);

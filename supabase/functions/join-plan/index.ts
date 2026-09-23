@@ -56,14 +56,16 @@ Deno.serve(async (req) => {
     return json(400, { error: "invalid_invite" });
   }
 
+  // Abuse limits: per network (generous — whole groups often share Wi-Fi) and per invite.
   const ip = (req.headers.get("x-forwarded-for") ?? "unknown").split(",")[0].trim();
-  const { data: allowed, error: rlError } = await admin.rpc("edge_rate_limit", {
-    p_bucket: `join-ip:${ip}`,
-    p_max: action === "preview" ? 120 : 30,
-    p_window_seconds: 3600,
-  });
-  if (rlError) return json(500, { error: "rate_limit_unavailable" });
-  if (!allowed) return json(429, { error: "rate_limited" });
+  const buckets: Array<[string, number]> = action === "preview"
+    ? [[`preview-ip:${ip}`, 300]]
+    : [[`join-ip:${ip}`, 100], [`join-code:${code}`, 60]];
+  for (const [bucket, max] of buckets) {
+    const { data: allowed, error: rlError } = await admin.rpc("edge_rate_limit", { p_bucket: bucket, p_max: max, p_window_seconds: 3600 });
+    if (rlError) return json(500, { error: "rate_limit_unavailable" });
+    if (!allowed) return json(429, { error: "rate_limited" });
+  }
 
   const { data: invite, error: inviteError } = await admin.rpc("check_invite", {
     p_code: code,

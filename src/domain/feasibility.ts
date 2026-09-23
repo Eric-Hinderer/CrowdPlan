@@ -84,6 +84,8 @@ export function chooseSlot(candidate: Candidate, input: PlanInput, overlap: Over
   if (candidate.startsAt) {
     return { start: candidate.startsAt, end: candidate.endsAt ?? candidate.startsAt + duration };
   }
+  // An event without a verified start time can't be scheduled into any window.
+  if (candidate.type === "event") return null;
   const bounds = timeBounds(input.dimensions, plan.kind);
   if (bounds.fixedStart) {
     // Specific start time: choose the allowed date with the strongest availability.
@@ -310,7 +312,12 @@ export function memberHardChecks(
       });
     }
   } else {
-    checks.push({ kind: "availability", memberId: member.id, result: "UNKNOWN", message: "No time slot works yet" });
+    checks.push({
+      kind: "availability",
+      memberId: member.id,
+      result: "UNKNOWN",
+      message: candidate.type === "event" ? "Event time not verified" : "No shared time yet",
+    });
   }
 
   const cost = memberCost(candidate, member, input);
@@ -319,6 +326,21 @@ export function memberHardChecks(
   const outbound = flights.find((f) => f.data.direction === "outbound");
   const ret = flights.find((f) => f.data.direction === "return");
   const tripStartDate = slot ? localDate(slot.start, tz) : null;
+
+  // A plan-wide per-person budget applies to each traveler's trip total.
+  const budgetDim = getDimension(input.dimensions, "budget");
+  if (candidate.type === "travel_package" && budgetDim && budgetDim.state !== "UNDECIDED" && budgetDim.value?.type === "money" && budgetDim.value.max != null && budgetDim.value.basis === "per_person") {
+    const max = budgetDim.value.max;
+    const r = checkMaxBudget(cost?.low ?? null, cost?.high ?? null, max, cost?.estimated ?? false);
+    checks.push({
+      kind: "plan_budget",
+      memberId: member.id,
+      result: r.result,
+      estimated: r.estimated,
+      message: r.result === "PASS" ? `Trip total within the ${formatMoney(max)}/person budget` : r.result === "FAIL" ? `Trip total is ${formatMoney(r.over ?? 0)} over the ${formatMoney(max)}/person budget` : r.message,
+      delta: r.over ? { amount: r.over } : undefined,
+    });
+  }
 
   const mine = constraints.filter((c) => c.strength === "hard" && (c.memberId === member.id || c.memberId === null));
   for (const c of mine) {

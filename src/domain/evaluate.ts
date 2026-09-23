@@ -7,7 +7,7 @@ import { activeConstraints } from "./constraints";
 import { candidateConsensus, planConsensus } from "./consensus";
 import { dateDimension, getDimension, searchWindows, slotRespectsDimensions } from "./dimensions";
 import { candidateStatus, chooseSlot, memberHardChecks, planLevelChecks, worst } from "./feasibility";
-import { formatMoney, formatMoneyRange } from "./money";
+import { formatMoneyRange } from "./money";
 import { compareEvaluations, computeMetrics, memberSoftScores, satisfactionFrom } from "./scoring";
 import { formatRange } from "./time";
 import type {
@@ -140,8 +140,10 @@ export function explain(candidate: Candidate, e: CandidateEvaluation, input: Pla
 
   const maxChecks = e.members.flatMap((m) => m.hard.filter((h) => h.kind === "max_budget"));
   if (maxChecks.length > 0 && maxChecks.every((h) => h.result === "PASS")) {
-    positives.push(maxChecks.length === n ? "Everyone under max budget" : `All ${maxChecks.length} budget limits met`);
+    positives.push(maxChecks.length === n ? "Everyone under max budget" : maxChecks.length === 1 ? `${nameOf(input, maxChecks[0].memberId)} is within their max budget` : `${maxChecks.length} people within their max budget`);
   }
+  const tripBudget = e.members.flatMap((m) => m.hard.filter((h) => h.kind === "plan_budget"));
+  if (tripBudget.length === n && n > 0 && tripBudget.every((h) => h.result === "PASS")) positives.push("Everyone within the per-person trip budget");
   const bf = e.metrics.budgetFit;
   const prefCount = e.members.filter((m) => m.soft.some((s) => s.kind === "preferred_budget")).length;
   if (prefCount > 0 && bf.withinPreferred > 0) positives.push(`${bf.withinPreferred} of ${n} within preferred budget`);
@@ -215,7 +217,7 @@ function dimensionStatuses(
 
   for (const dim of input.dimensions) {
     let progress: DimensionStatus["progress"] = dim.state === "LOCKED" ? "RESOLVED" : "OPEN";
-    let summary = dim.display || (dim.state === "UNDECIDED" ? "Undecided" : "");
+    const summary = dim.display || (dim.state === "UNDECIDED" ? "Undecided" : "");
     let detail: string | undefined;
     const isWhen = dim === dateDimension(input.dimensions) || dim.key === "time";
     if (isWhen && input.plan.kind !== "travel") {
@@ -244,7 +246,8 @@ function dimensionStatuses(
     if (dim.key === "budget" && dim.value?.type === "money" && dim.value.max != null && leader) {
       const over = leader.planChecks.find((c) => c.kind === "plan_budget" && c.result === "FAIL");
       if (over) progress = "BLOCKED";
-      detail = over ? over.message : `≤ ${formatMoney(dim.value.max)}/person`;
+      detail = over ? over.message : leader.members.some((m) => m.hard.some((h) => h.kind === "plan_budget" && h.result === "FAIL")) ? "Leading option is over budget for someone" : undefined;
+      if (!over && detail) progress = "BLOCKED";
     }
     if (finalized) progress = "RESOLVED";
     out.push({ key: dim.key, label: dim.label, state: dim.state, progress, summary, detail });

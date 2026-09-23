@@ -53,7 +53,7 @@ export interface RepairResult {
 
 const MAX_EVALUATIONS = 400;
 const SCHEDULE_KINDS = new Set(["availability", "earliest_start", "latest_end", "unavailable_day", "hours"]);
-const FLIGHT_KINDS = new Set(["latest_arrival_home", "earliest_departure", "no_travel_day", "nonstop_only", "max_budget"]);
+const FLIGHT_KINDS = new Set(["latest_arrival_home", "earliest_departure", "no_travel_day", "nonstop_only", "max_budget", "plan_budget"]);
 
 function nameOf(input: PlanInput, id: string | null) {
   return input.members.find((m) => m.id === id)?.displayName ?? "Someone";
@@ -136,7 +136,7 @@ export function makeThisWork(candidateId: string, input: PlanInput, overlapIn?: 
       const directions: Array<"outbound" | "return"> = [];
       if (fails.some((f) => f.kind === "latest_arrival_home")) directions.push("return");
       if (fails.some((f) => f.kind === "earliest_departure")) directions.push("outbound");
-      if (fails.some((f) => ["no_travel_day", "nonstop_only", "max_budget"].includes(f.kind))) {
+      if (fails.some((f) => ["no_travel_day", "nonstop_only", "max_budget", "plan_budget"].includes(f.kind))) {
         if (!directions.includes("outbound")) directions.push("outbound");
         if (!directions.includes("return")) directions.push("return");
       }

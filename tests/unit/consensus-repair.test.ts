@@ -127,6 +127,15 @@ describe("travel totals", () => {
     expect(cost.parts.map((p) => p.sourceKind)).toEqual(["live", "live", "live", "estimate"]);
   });
 
+  it("a plan-wide per-person budget applies to each traveler total", () => {
+    const inp = travelBase(austin());
+    inp.constraints = [];
+    inp.dimensions.push(dim("budget", "CONSTRAINED", { type: "money", max: 700, currency: "USD", basis: "per_person" }, "≤ $700"));
+    const e = evaluatePlan(inp).evaluations[0];
+    expect(e.status).toBe("INFEASIBLE");
+    expect(e.explanation.hardViolations).toContain("Sarah: Trip total is $80 over the $700/person budget");
+  });
+
   it("an unknown flight price leaves the total unverified", () => {
     const c = austin();
     c.components = c.components.map((x) => (x.id === "sarah-ret" ? { ...x, cost: null } : x));

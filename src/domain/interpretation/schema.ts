@@ -39,6 +39,8 @@ export const dimensionDraftSchema = z.object({
 
 export const clarificationOptionSchema = z.object({
   label: z.string().min(1).max(120),
+  /** For plan-level ambiguity: the dimension value this option would set. */
+  dimension: z.lazy(() => dimensionDraftSchema).optional(),
   /** A constraint to apply if this option is chosen; absent = free text / no rule. */
   constraint: z
     .object({

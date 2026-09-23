@@ -86,22 +86,31 @@ Deno.serve(async (req) => {
       if (!/^[a-z0-9-]{6,40}$/.test(runId)) return json(400, { error: "invalid_input" });
       // Collect exactly this run's users before deleting: members of the run's
       // plans (organizer test accounts and minted guests) plus run-tagged accounts.
-      const { data: runPlans } = await admin.from("plans").select("id").eq("test_run_id", runId);
-      const planIds = (runPlans ?? []).map((p) => p.id);
       const userIds = new Set<string>();
-      if (planIds.length > 0) {
-        const { data: members } = await admin.from("plan_members").select("user_id").in("plan_id", planIds);
-        for (const m of members ?? []) userIds.add(m.user_id);
-      }
+      const runAccounts: string[] = [];
       for (let page = 1; page <= 20; page++) {
         const { data } = await admin.auth.admin.listUsers({ page, perPage: 200 });
         const users = data?.users ?? [];
         for (const u of users) {
-          if ((u.email ?? "").endsWith(TEST_DOMAIN) && (u.email ?? "").includes(runId)) userIds.add(u.id);
+          if ((u.email ?? "").endsWith(TEST_DOMAIN) && (u.email ?? "").includes(runId)) {
+            userIds.add(u.id);
+            runAccounts.push(u.id);
+          }
         }
         if (users.length < 200) break;
       }
-      const { data: deleted } = await admin.from("plans").delete().eq("test_run_id", runId).select("id");
+      const planIds = new Set<string>();
+      const { data: tagged } = await admin.from("plans").select("id").eq("test_run_id", runId);
+      for (const p of tagged ?? []) planIds.add(p.id);
+      if (runAccounts.length) {
+        const { data: owned } = await admin.from("plans").select("id").in("owner_id", runAccounts);
+        for (const p of owned ?? []) planIds.add(p.id);
+      }
+      if (planIds.size > 0) {
+        const { data: members } = await admin.from("plan_members").select("user_id").in("plan_id", [...planIds]);
+        for (const m of members ?? []) userIds.add(m.user_id);
+      }
+      const { data: deleted } = planIds.size ? await admin.from("plans").delete().in("id", [...planIds]).select("id") : { data: [] };
       let usersDeleted = 0;
       for (const id of userIds) {
         const { data: u } = await admin.auth.admin.getUserById(id);

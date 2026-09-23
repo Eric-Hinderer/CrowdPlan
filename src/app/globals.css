@@ -1,26 +1,227 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/*
+ * CrowdPlan tokens. Signature: state "stamps" (LOCKED ink, CONSTRAINED bracket,
+ * UNDECIDED open slot) and the highlighter overlap band. Everything else quiet.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --paper: #f5f6fb;
+  --surface: #ffffff;
+  --surface-2: #eceef6;
+  --ink: #1b1f3b;
+  --ink-2: #4a4f6e;
+  --ink-3: #7a7f9a;
+  --rule: #dcdfeb;
+  --brand: #5b3df5;
+  --brand-ink: #ffffff;
+  --locked: #5b3df5;
+  --constrained: #0e9f8e;
+  --undecided: #8a8fa8;
+  --resolved: #1f9d55;
+  --blocked: #e0453a;
+  --warn: #b7791f;
+  --highlight: #ffe14d;
+  --highlight-ink: #3a3200;
+  --focus: #5b3df5;
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --paper: #0f1024;
+  --surface: #171935;
+  --surface-2: #20234a;
+  --ink: #eef0ff;
+  --ink-2: #b9bddb;
+  --ink-3: #8a8fb4;
+  --rule: #2c3060;
+  --brand: #8b76ff;
+  --brand-ink: #0f1024;
+  --locked: #9d8cff;
+  --constrained: #34d1bd;
+  --undecided: #9aa0c4;
+  --resolved: #4ad485;
+  --blocked: #ff7a6e;
+  --warn: #f0b64d;
+  --highlight: #ffe14d;
+  --highlight-ink: #2a2400;
+  --focus: #b3a6ff;
+  color-scheme: dark;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-paper: var(--paper);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-rule: var(--rule);
+  --color-brand: var(--brand);
+  --color-brand-ink: var(--brand-ink);
+  --color-locked: var(--locked);
+  --color-constrained: var(--constrained);
+  --color-undecided: var(--undecided);
+  --color-resolved: var(--resolved);
+  --color-blocked: var(--blocked);
+  --color-warn: var(--warn);
+  --color-highlight: var(--highlight);
+  --color-highlight-ink: var(--highlight-ink);
+  --font-sans: var(--font-bricolage), ui-sans-serif, system-ui, sans-serif;
+  --radius-stamp: 6px;
+  --radius-sheet: 22px;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  background: var(--paper);
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-optical-sizing: auto;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.5;
+}
+
+:focus-visible {
+  outline: 2.5px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+::selection {
+  background: var(--highlight);
+  color: var(--highlight-ink);
+}
+
+/* Type scale (1.25 ratio) */
+.t-display {
+  font-size: clamp(2.1rem, 7vw, 3.6rem);
+  line-height: 1.02;
+  letter-spacing: -0.035em;
+  font-weight: 700;
+  font-stretch: 85%;
+}
+.t-title {
+  font-size: clamp(1.55rem, 4.5vw, 2.1rem);
+  line-height: 1.1;
+  letter-spacing: -0.025em;
+  font-weight: 700;
+}
+.t-heading {
+  font-size: 1.2rem;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  font-weight: 650;
+}
+.t-small {
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+
+/* Highlighter swipe used for the group overlap */
+.highlighter {
+  background-image: linear-gradient(
+    100deg,
+    transparent 0.4em,
+    color-mix(in oklab, var(--highlight) 92%, transparent) 0.6em,
+    color-mix(in oklab, var(--highlight) 80%, transparent) 94%,
+    transparent 98%
+  );
+  color: var(--highlight-ink);
+}
+
+/* State stamps */
+.stamp {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border-radius: var(--radius-stamp);
+  padding: 0.16rem 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.stamp-locked {
+  background: var(--locked);
+  color: #fff;
+  transform: rotate(-1.5deg);
+  box-shadow: 0 1px 0 color-mix(in oklab, var(--locked) 50%, black);
+}
+[data-theme="dark"] .stamp-locked {
+  color: var(--paper);
+}
+.stamp-constrained {
+  color: var(--constrained);
+  border: 1.5px solid currentColor;
+  border-left-width: 4px;
+  border-right-width: 4px;
+}
+.stamp-undecided {
+  color: var(--undecided);
+  border: 1.5px dashed currentColor;
+}
+.stamp-resolved {
+  color: var(--resolved);
+  background: color-mix(in oklab, var(--resolved) 14%, transparent);
+}
+.stamp-blocked {
+  color: var(--blocked);
+  background: repeating-linear-gradient(
+    135deg,
+    color-mix(in oklab, var(--blocked) 16%, transparent) 0 5px,
+    transparent 5px 9px
+  );
+  border: 1.5px solid currentColor;
+}
+
+/* Native dialog sheets */
+dialog.sheet {
+  margin: auto auto 0;
+  width: 100%;
+  max-width: 34rem;
+  max-height: 92dvh;
+  border: 0;
+  border-radius: var(--radius-sheet) var(--radius-sheet) 0 0;
+  padding: 0;
+  background: var(--surface);
+  color: var(--ink);
+}
+@media (min-width: 640px) {
+  dialog.sheet {
+    margin: auto;
+    border-radius: var(--radius-sheet);
+  }
+}
+dialog.sheet::backdrop {
+  background: color-mix(in oklab, var(--ink) 45%, transparent);
+  backdrop-filter: blur(2px);
+}
+dialog.sheet[open] {
+  animation: sheet-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes sheet-in {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .stamp-locked {
+    transform: none;
+  }
 }
