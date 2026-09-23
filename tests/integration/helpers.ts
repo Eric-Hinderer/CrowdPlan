@@ -45,8 +45,8 @@ export async function magicLinkTokenHash(email: string): Promise<string> {
   return json.tokenHash;
 }
 
-export async function cleanupRun(runId: string) {
-  return adminCall({ action: "cleanup", testRunId: runId });
+export async function cleanupRun(runId: string, guestUserIds: string[] = []) {
+  return adminCall({ action: "cleanup", testRunId: runId, guestUserIds });
 }
 
 export function newInvite() {

@@ -1,7 +1,8 @@
 "use client";
 
 import { CheckCircle2, CircleHelp, LocateFixed, MessageSquareText, X } from "lucide-react";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
+import { getMyPreferencesAction } from "@/app/actions/account";
 import {
   deleteConstraintAction,
   interpretStatementAction,
@@ -18,6 +19,21 @@ import { useWorkspace } from "./context";
 
 const DIETARY = ["Vegetarian", "Vegan", "Gluten-free", "Shellfish allergy", "Nut allergy", "Dairy-free", "Halal", "Kosher"];
 const CUISINES = ["Italian", "Mexican", "Thai", "Sushi", "Chinese", "Indian", "BBQ", "Steak", "Seafood", "Pizza", "Burgers", "Mediterranean"];
+
+type SavedPrefs = { homeArea: string | null; usualDinnerBudget: number | null; favoriteCuisines: string[]; dietaryRestrictions: string[] };
+
+const norm = (s: string) => s.trim().toLowerCase().replace(/ allergy$/, "");
+/** Split saved free-text items into ones matching a chip and ones that don't. */
+function matchChips(saved: string[], chips: string[]) {
+  const matched: string[] = [];
+  const other: string[] = [];
+  for (const item of saved) {
+    const chip = chips.find((c) => norm(c) === norm(item));
+    if (chip) matched.push(chip);
+    else if (item.trim()) other.push(item.trim());
+  }
+  return { matched, other };
+}
 
 export function YourPart() {
   const ws = useWorkspace();
@@ -208,6 +224,45 @@ function QuestionsForm({ onDone }: { onDone: () => void }) {
   const [notes, setNotes] = useState<string>((prev.notes as string) ?? "");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const [saved, setSaved] = useState<SavedPrefs | null>(null);
+  const firstTime = !ws.bundle.responses[me.id]?.submittedAt;
+
+  // Account holders answering for the first time can start from their saved
+  // preferences. Nothing is stored until they review the form and save it.
+  useEffect(() => {
+    if (!firstTime || ws.flags.demo) return;
+    let live = true;
+    getMyPreferencesAction().then((r) => {
+      if (live && r.ok && r.data) setSaved(r.data);
+    });
+    return () => {
+      live = false;
+    };
+  }, [firstTime, ws.flags.demo]);
+
+  const savedSummary = useMemo(() => {
+    if (!saved) return [];
+    const parts: string[] = [];
+    if (saved.homeArea && kind !== "travel") parts.push(`from ${saved.homeArea}`);
+    if (saved.usualDinnerBudget && kind === "dinner") parts.push(`usually about $${saved.usualDinnerBudget}`);
+    if (kind === "dinner" && saved.dietaryRestrictions.length) parts.push(saved.dietaryRestrictions.join(", "));
+    if (kind === "dinner" && saved.favoriteCuisines.length) parts.push(`likes ${saved.favoriteCuisines.join(", ")}`);
+    return parts;
+  }, [saved, kind]);
+
+  const applySaved = () => {
+    if (!saved) return;
+    if (saved.homeArea && kind !== "travel" && !origin.label) setOrigin({ label: saved.homeArea, lat: null, lng: null });
+    if (kind === "dinner") {
+      if (saved.usualDinnerBudget && !prefBudget) setPrefBudget(String(saved.usualDinnerBudget));
+      const diet = matchChips(saved.dietaryRestrictions, DIETARY);
+      setDietary([...new Set([...dietary, ...diet.matched])]);
+      const cuis = matchChips(saved.favoriteCuisines, CUISINES);
+      setPrefer([...new Set([...prefer, ...cuis.matched])].filter((c) => !avoid.includes(c)));
+      if (diet.other.length && !notes.includes(diet.other.join(", "))) setNotes([notes.trim(), `Dietary: ${diet.other.join(", ")}`].filter(Boolean).join("\n"));
+    }
+    setSaved(null);
+  };
 
   const locate = () =>
     navigator.geolocation?.getCurrentPosition(
@@ -250,6 +305,18 @@ function QuestionsForm({ onDone }: { onDone: () => void }) {
         submit();
       }}
     >
+      {savedSummary.length ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rule bg-surface-2 px-4 py-3 text-sm" data-testid="saved-prefs">
+          <p>
+            <span className="font-semibold">Your saved preferences:</span> {savedSummary.join("; ")}.
+          </p>
+          <div className="flex gap-2">
+            <Button type="button" variant="secondary" onClick={applySaved}>Fill these in</Button>
+            <Button type="button" variant="ghost" onClick={() => setSaved(null)}>Not this time</Button>
+          </div>
+        </div>
+      ) : null}
+
       {kind === "travel" ? (
         <Field label="Where are you flying from?" htmlFor="origin" hint="An airport code like OMA, or a city.">
           <Input id="origin" value={origin.label} maxLength={120} onChange={(e) => setOrigin({ ...origin, label: e.target.value })} placeholder="OMA" />

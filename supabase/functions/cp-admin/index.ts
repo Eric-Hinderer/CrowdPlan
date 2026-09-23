@@ -110,6 +110,12 @@ Deno.serve(async (req) => {
         const { data: members } = await admin.from("plan_members").select("user_id").in("plan_id", [...planIds]);
         for (const m of members ?? []) userIds.add(m.user_id);
       }
+      // Guest identities the run already detached from its plans (e.g. claimed
+      // into an account). Still subject to the guest-domain + no-membership check below.
+      const extraGuests = Array.isArray(body.guestUserIds) ? body.guestUserIds.slice(0, 50) : [];
+      for (const id of extraGuests) {
+        if (typeof id === "string" && /^[0-9a-f-]{36}$/.test(id)) userIds.add(id);
+      }
       const { data: deleted } = planIds.size ? await admin.from("plans").delete().in("id", [...planIds]).select("id") : { data: [] };
       let usersDeleted = 0;
       for (const id of userIds) {
